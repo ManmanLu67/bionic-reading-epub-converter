@@ -56,3 +56,16 @@ def test_min_word_length_skips_shorter_words():
     converter = make_converter(min_word_length=4)
     assert converter._split_word('the') == (None, None)
     assert converter._split_word('word') == ('wo', 'rd')
+
+
+def test_split_word_keeps_apostrophe_in_one_word():
+    bold, rest = make_converter()._split_word("don't")
+    assert bold + rest == "don't"
+    assert "'" in rest or "'" in bold or "\u2019" in rest or "\u2019" in bold
+    assert rest
+
+
+def test_split_word_stops_bold_before_hyphen():
+    bold, rest = make_converter()._split_word('still-astonished')
+    assert bold == 'still'
+    assert rest == '-astonished'

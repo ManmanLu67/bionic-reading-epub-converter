@@ -3,14 +3,18 @@
 import io
 import os
 import re
+import sys
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from lxml import etree
 
+LETTER = r'[a-zA-ZÀ-ÿĀ-žА-яЁёҐґЄєІіЇїЎўẞß\u0370-\u03FF\u1F00-\u1FFF]'
 WORD_PATTERN = re.compile(
-    r'[a-zA-ZÀ-ÿĀ-žА-яЁёҐґЄєІіЇїЎўẞß\u0370-\u03FF\u1F00-\u1FFF]+',
+    LETTER + r"+(?:['\u2019\u2010\u2011-]" + LETTER + r'+)*',
     re.UNICODE,
 )
+
+HYPHENS = frozenset(['-', '\u2010', '\u2011'])
 
 SKIP_TAGS = frozenset([
     'script', 'style', 'code', 'pre', 'kbd', 'samp', 'var',
@@ -30,12 +34,32 @@ SKIP_PATHS = frozenset([
     'META-INF/signatures.xml',
 ])
 
+BIONIC_CSS = 'b{font-weight:bold;font-style:inherit;}'
 
-def _b_tag_for(host_element):
+
+def _tag_for(local, host_element):
     ns = etree.QName(host_element).namespace
     if ns:
-        return '{%s}b' % ns
-    return 'b'
+        return '{%s}%s' % (ns, local)
+    return local
+
+
+def _bionic_element(host, bold_text, rest_text):
+    b_elem = etree.Element(_tag_for('b', host))
+    b_elem.text = bold_text
+    b_elem.tail = rest_text
+    return b_elem
+
+
+def _inject_bionic_style(tree):
+    heads = tree.xpath('//*[local-name()="head"]')
+    if not heads:
+        return
+    head = heads[0]
+    style = etree.Element(_tag_for('style', head))
+    style.set('type', 'text/css')
+    style.text = BIONIC_CSS
+    head.append(style)
 
 
 class BionicConverter:
@@ -63,8 +87,11 @@ class BionicConverter:
                             content = self._process_xhtml(content)
                         except RecursionError:
                             raise
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            print(
+                                'warning: skipped %s: %s' % (item.filename, exc),
+                                file=sys.stderr,
+                            )
 
                     if item.filename == 'mimetype':
                         zip_out.writestr(item, content, compress_type=ZIP_STORED)
@@ -97,6 +124,8 @@ class BionicConverter:
         if not self._inserted:
             return content
 
+        _inject_bionic_style(tree)
+
         encoding = tree.docinfo.encoding or 'UTF-8'
         doctype = tree.docinfo.doctype or None
         kwargs = {
@@ -127,6 +156,25 @@ class BionicConverter:
                 if parent is not None:
                     self._process_text_node(child, 'tail', parent)
 
+    def _nodes_from_parts(self, parts, host):
+        new_kids = []
+        leading = None
+        first_text = True
+        for part in parts:
+            if part[0] == 'text':
+                if first_text:
+                    leading = part[1]
+                    first_text = False
+                elif new_kids:
+                    new_kids[-1].tail = (new_kids[-1].tail or '') + part[1]
+                else:
+                    leading = (leading or '') + part[1]
+            else:
+                new_kids.append(_bionic_element(host, part[1], part[2]))
+                first_text = False
+                self._inserted = True
+        return leading, new_kids
+
     def _process_text_node(self, element, attr, host):
         text = getattr(element, attr)
         if not text or not text.strip():
@@ -154,59 +202,21 @@ class BionicConverter:
         if not any(p[0] == 'bold' for p in parts):
             return
 
-        b_tag = _b_tag_for(host)
+        leading, new_kids = self._nodes_from_parts(parts, host)
 
         if attr == 'text':
-            element.text = None
-            first_text = True
-            insert_index = 0
-
-            for part in parts:
-                if part[0] == 'text':
-                    if first_text:
-                        element.text = part[1]
-                        first_text = False
-                    elif insert_index > 0:
-                        prev = element[insert_index - 1]
-                        prev.tail = (prev.tail or '') + part[1]
-                    else:
-                        element.text = (element.text or '') + part[1]
-                else:
-                    bold_text, rest_text = part[1], part[2]
-                    b_elem = etree.Element(b_tag)
-                    b_elem.text = bold_text
-                    b_elem.tail = rest_text
-                    element.insert(insert_index, b_elem)
-                    insert_index += 1
-                    first_text = False
-                    self._inserted = True
+            element.text = leading
+            if new_kids:
+                element[:] = new_kids + list(element)
         else:
-            element.tail = None
             parent = element.getparent()
             if parent is None:
                 return
-
-            elem_index = list(parent).index(element)
-            insert_index = elem_index + 1
-            first_text = True
-
-            for part in parts:
-                if part[0] == 'text':
-                    if first_text:
-                        element.tail = part[1]
-                        first_text = False
-                    else:
-                        prev = parent[insert_index - 1]
-                        prev.tail = (prev.tail or '') + part[1]
-                else:
-                    bold_text, rest_text = part[1], part[2]
-                    b_elem = etree.Element(b_tag)
-                    b_elem.text = bold_text
-                    b_elem.tail = rest_text
-                    parent.insert(insert_index, b_elem)
-                    insert_index += 1
-                    first_text = False
-                    self._inserted = True
+            element.tail = leading
+            if new_kids:
+                kids = list(parent)
+                idx = kids.index(element)
+                parent[:] = kids[:idx + 1] + new_kids + kids[idx + 1:]
 
     def _split_word(self, word):
         length = len(word)
@@ -224,4 +234,8 @@ class BionicConverter:
 
         bold_len = max(1, round(length * self.boldness_ratio))
         bold_len = min(bold_len, length - 1)
+        for i, char in enumerate(word):
+            if char in HYPHENS and i > 0:
+                bold_len = min(bold_len, i)
+                break
         return word[:bold_len], word[bold_len:]

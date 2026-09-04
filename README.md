@@ -1,6 +1,6 @@
 # Bionic EPUB Converter
 
-CLI that converts an EPUB to [Bionic Reading](https://bionic-reading.com/) format: the start of each word is wrapped in `<b>` so the eye can pick up word shapes faster.
+CLI that converts an EPUB to [Bionic Reading](https://bionic-reading.com/) format: the start of each word is wrapped in `<b>` so the eye can pick up word shapes faster. A small CSS rule (`font-style: inherit`) is injected so italic and other inherited styles stay on the bold prefix.
 
 Fork of [dobrosketchkun/bionic-reading-epub-converter](https://github.com/dobrosketchkun/bionic-reading-epub-converter). Original authors are credited; this tree is a standalone command-line tool.
 
@@ -45,7 +45,7 @@ Without `--force`, an existing output path is an error.
 
 - EPUB only (not MOBI, AZW3, or PDF).
 - Latin, Cyrillic, and Greek alphabets. Logographic scripts (Chinese, Japanese kanji, Korean hanja) are not supported.
-- Chapter XHTML/HTML/XML inside the EPUB is rewritten; images, CSS, fonts, and package metadata are copied as-is.
+- Chapter XHTML/HTML inside the EPUB is rewritten; images, CSS, fonts, and package metadata are copied as-is.
 
 ## Develop
 

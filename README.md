@@ -1,34 +1,54 @@
-Jump to [UPDATES](#updates)
+# Bionic EPUB Converter
 
-### What this is 
+CLI that converts an EPUB to [Bionic Reading](https://bionic-reading.com/) format: the start of each word is wrapped in `<b>` so the eye can pick up word shapes faster.
 
-This is a very rudimentary epub converter, but it will probably get things done. 
+Fork of [dobrosketchkun/bionic-reading-epub-converter](https://github.com/dobrosketchkun/bionic-reading-epub-converter). Original authors are credited; this tree is a standalone command-line tool.
 
-Usage:
-```python brec.py myepubbook.epub```
+## Install
 
-The result would be a "bionic_myepubbook.epub" file and a "myepubbook.epub_zip" folder (this one you can delete or explore)
-
-
-[Bionic Reading](https://bionic-reading.com/) allegedly  helps you read faster and read in general (or at all) if you have some type of struggles in this field.
-
-
-![](https://raw.githubusercontent.com/dobrosketchkun/bionic-reading-epub-converter/main/misc/alice.png)
-
-
-### Updates
-
-#### brec_v2.py
-
-Probably a less "rudimentary" new version, but it remains to be seen.
-
-Usage:
+Python 3.9+ and `lxml`:
 
 ```
-pytnon brec_v2.py input.epub output.epub 
+pip install -e .
 ```
 
-#### Calibre plugin
+For tests:
 
-See the [calibre_plugin/README.md](calibre_plugin/README.md) for details on the Calibre plugin version of Bionic Reading.
+```
+pip install -e ".[dev]"
+```
 
+## Usage
+
+```
+bionic-epub INPUT.epub [OUTPUT.epub]
+```
+
+If `OUTPUT` is omitted, the file is written next to the input as `bionic_<filename>.epub`.
+
+```
+bionic-epub book.epub
+bionic-epub book.epub book-bionic.epub --ratio 40
+bionic-epub book.epub --force
+```
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `--ratio` | 50 | Percent of each word to bold (25–75). Shorter words still bold only the first letter. The last letter is never bolded. |
+| `--min-word-length` | 1 | Ignore words shorter than this. |
+| `--skip-short-words` | off | Leave 1–2 letter words unchanged. |
+| `--force` | off | Overwrite an existing output file. |
+
+Without `--force`, an existing output path is an error.
+
+## Limits
+
+- EPUB only (not MOBI, AZW3, or PDF).
+- Latin, Cyrillic, and Greek alphabets. Logographic scripts (Chinese, Japanese kanji, Korean hanja) are not supported.
+- Chapter XHTML/HTML/XML inside the EPUB is rewritten; images, CSS, fonts, and package metadata are copied as-is.
+
+## Develop
+
+```
+pytest
+```

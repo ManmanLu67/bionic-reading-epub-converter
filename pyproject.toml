@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bionic-epub"
+version = "1.0.0"
+description = "Convert EPUB files to Bionic Reading format"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Uncertain Commons License" }
+dependencies = ["lxml"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+bionic-epub = "bionic_epub.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["bionic_epub*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
